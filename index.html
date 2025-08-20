@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura-Dispense</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background-color: #f3f4f6;
+            color: #111827;
+        }
+        .dark body {
+            background-color: #111827;
+            color: #e5e7eb;
+        }
+        canvas {
+            display: block;
+            touch-action: none;
+            width: 100%;
+            height: 100%;
+        }
+        .content-panel {
+            position: absolute;
+            top: 2rem;
+            left: 2rem;
+            max-width: 350px;
+        }
+        .controls {
+            position: absolute;
+            bottom: 2rem;
+            right: 2rem;
+        }
+        .view-container {
+            display: none;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-50">
+
+    <!-- 3D Model View -->
+    <div id="3d-view" class="view-container">
+        <canvas id="dispenser-breakdown"></canvas>
+        <div class="content-panel bg-white/70 dark:bg-gray-800/70 backdrop-blur p-6 rounded-2xl shadow-lg">
+            <h1 id="view-title" class="text-xl font-bold mb-2"></h1>
+            <p id="view-description" class="text-sm"></p>
+            <div id="component-info" class="mt-4 text-sm font-semibold">
+                <!-- Component information will be displayed here -->
+                <div id="component-list"></div>
+                <div id="quick-metrics" class="mt-4">
+                    <h3 id="metrics-title" class="text-base font-bold text-gray-800 dark:text-gray-200"></h3>
+                    <ul class="list-disc list-inside text-xs mt-1 space-y-1">
+                        <li id="metric-cost"></li>
+                        <li id="metric-savings"></li>
+                        <li id="metric-waste"></li>
+                    </ul>
+                </div>
+                <!-- Added new metric counters -->
+                <div id="live-metrics" class="mt-6 border-t pt-4 border-gray-300 dark:border-gray-600">
+                    <h3 class="text-base font-bold text-gray-800 dark:text-gray-200">Live Metrics:</h3>
+                    <ul class="list-none text-xs mt-1 space-y-1">
+                        <li><strong id="dispense-counter-label"></strong> <span id="dispense-counter">0</span></li>
+                        <li><strong id="remaining-label"></strong> <span id="remaining-quantity">150g</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="controls flex flex-col items-end space-y-4">
+            <div class="flex space-x-4">
+                <button id="breakdown-button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105">
+                </button>
+                <button id="reset-button" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105">
+                </button>
+            </div>
+            <div class="flex space-x-4">
+                <button id="dispense-button" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105">
+                </button>
+            </div>
+            <div id="control-text" class="text-sm text-gray-500 dark:text-gray-400 text-right">
+            </div>
+        </div>
+    </div>
+
+    <!-- Pricing Report View -->
+    <div id="report-view" class="view-container">
+        <div class="p-8">
+            <div class="bg-white/70 dark:bg-gray-800/70 backdrop-blur p-8 rounded-2xl shadow-lg max-w-4xl mx-auto">
+                <h1 id="report-title" class="text-3xl font-bold mb-4"></h1>
+                <p id="report-intro-text" class="text-sm mb-6 text-gray-700 dark:text-gray-300"></p>
+
+                <hr class="my-6 border-gray-300 dark:border-gray-600">
+                
+                <h2 id="cost-drivers-title" class="text-2xl font-bold mb-4"></h2>
+                <p id="cost-drivers-intro" class="text-sm mb-4"></p>
+                <ul class="list-disc list-inside space-y-2 mb-4">
+                    <li>
+                        <strong id="consumables-title" class="font-bold"></strong>: <span id="consumables-text"></span>
+                        <ul class="list-disc list-inside ml-8 mt-1">
+                            <li id="cost-per-dispense"></li>
+                        </ul>
+                    </li>
+                    <li>
+                        <strong id="maintenance-title" class="font-bold"></strong>: <span id="maintenance-text"></span>
+                        <ul class="list-disc list-inside ml-8 mt-1">
+                            <li id="annual-maintenance-cost"></li>
+                        </ul>
+                    </li>
+                </ul>
+
+                <hr class="my-6 border-gray-300 dark:border-gray-600">
+
+                <h2 id="cost-benefit-title" class="text-2xl font-bold mb-4"></h2>
+                <p id="cost-benefit-intro" class="text-sm mb-4"></p>
+                <div class="overflow-x-auto mb-4">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-600 rounded-lg overflow-hidden shadow-sm">
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th id="metric-header" scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
+                                <th id="aura-header" scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
+                                <th id="single-use-header" scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-600">
+                            <tr>
+                                <td id="row1-metric" class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white"></td>
+                                <td id="row1-aura" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"></td>
+                                <td id="row1-single" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"></td>
+                            </tr>
+                            <tr>
+                                <td id="row2-metric" class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white"></td>
+                                <td id="row2-aura" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"></td>
+                                <td id="row2-single" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"></td>
+                            </tr>
+                            <tr>
+                                <td id="row3-metric" class="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 dark:text-white"></td>
+                                <td id="row3-aura" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"></td>
+                                <td id="row3-single" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p id="footnote" class="text-xs text-gray-500 dark:text-gray-400 mt-2"></p>
+
+                <hr class="my-6 border-gray-300 dark:border-gray-600">
+
+                <h2 id="sustainability-title" class="text-2xl font-bold mb-4"></h2>
+                <p id="sustainability-intro" class="text-sm mb-4"></p>
+                <ul class="list-disc list-inside space-y-2 mb-4">
+                    <li>
+                        <strong id="plastic-reduction-title" class="font-bold"></strong>: <span id="plastic-reduction-text"></span>
+                    </li>
+                </ul>
+                <p id="conclusion-text" class="text-sm text-gray-700 dark:text-gray-300"></p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Overall UI controls -->
+    <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-4">
+        <button id="show-3d-button" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105">
+            3D View
+        </button>
+        <button id="show-report-button" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105">
+            Report
+        </button>
+    </div>
+
+    <!-- Language Selector -->
+    <div class="absolute bottom-4 left-4">
+        <label for="language-select" class="sr-only">Select Language</label>
+        <select id="language-select" class="form-select block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50">
+            <option value="en">English</option>
+            <option value="es">Español</option>
+        </select>
+    </div>
+
+    <!-- Three.js and GSAP from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script>
+        window.onload = function() {
+            // --- UI and View Management ---
+            const views = {
+                '3d': document.getElementById('3d-view'),
+                'report': document.getElementById('report-view')
+            };
+            const showView = (viewId) => {
+                for (const id in views) {
+                    views[id].style.display = id === viewId ? 'block' : 'none';
+                }
+            };
+            showView('3d');
+
+            document.getElementById('show-3d-button').addEventListener('click', () => showView('3d'));
+            document.getElementById('show-report-button').addEventListener('click', () => showView('report'));
+
+            // --- Language Management ---
+            const translations = {
+                'en': {
+                    'viewTitle': 'Aura-Dispense: Exploded View',
+                    'viewDescription': 'Explore the device\'s key components. Click \'Breakdown\' to see the layers and \'Reset\' to reassemble.',
+                    'breakdownButton': 'Breakdown',
+                    'resetButton': 'Reset',
+                    'dispenseButton': 'Dispense',
+                    'controlText': 'Click and drag to rotate. <br> Use mouse wheel or pinch-to-zoom to zoom in/out. <br> Press **\'D\'** to dispense.',
+                    'metricsTitle': 'Key Metrics (Per Unit):',
+                    'metricCost': '**Cost per Usage:** ~$0.01',
+                    'metricSavings': '**Annual Savings:** Up to ~$4,000',
+                    'metricWaste': '**Plastic Waste Reduction:** ~1.5 kg',
+                    'dispenseCounterLabel': 'Dispenses:',
+                    'remainingLabel': 'Remaining:',
+                    'reportTitle': 'Sustainable Operating and Pricing Model',
+                    'reportIntroText': 'This document provides a comprehensive, technical breakdown of the Aura-Dispense system\'s operational pricing. It’s designed to illustrate how this model delivers a measurable return on investment while significantly reducing your environmental footprint. The following analysis details the primary cost drivers and a realistic cost-benefit comparison to demonstrate its long-term value.',
+                    'costDriversTitle': 'Key Operational Cost Drivers',
+                    'costDriversIntro': 'The recurring costs for the Aura-Dispense system are driven by two main factors: consumables and maintenance. The device\'s low-power motor and infrared sensor consume negligible energy.',
+                    'consumablesTitle': 'Consumables (Toothpaste)',
+                    'consumablesText': 'The primary recurring cost is bulk toothpaste. A standard 150g bulk tube, which costs approximately <strong>$3.00</strong>, can yield a consistent "right amount" of about <strong>0.5g</strong> per dispense. This provides <strong>300 dispenses per tube</strong>.',
+                    'costPerDispense': '<strong>Cost per Dispense: $0.01</strong>',
+                    'maintenanceTitle': 'Maintenance (Labor)',
+                    'maintenanceText': 'This includes the time spent checking, cleaning, and refilling the dispenser. Assuming a one-minute task performed once per day, this totals approximately <strong>6 hours per year</strong> per unit.',
+                    'annualMaintenanceCost': '<strong>Annual Maintenance Cost</strong>: At a labor rate of <strong>$20/hour</strong>, this amounts to <strong>$120 per year</strong>.',
+                    'costBenefitTitle': 'Cost-Benefit Analysis: The ROI of Efficiency',
+                    'costBenefitIntro': 'The true value of the Aura-Dispense system is best illustrated by comparing it to the traditional model of single-use, pre-packaged toothpaste.',
+                    'metricHeader': 'Metric',
+                    'auraHeader': 'Aura-Dispense System',
+                    'singleUseHeader': 'Single-Use Tubes',
+                    'row1Metric': 'Cost per Usage',
+                    'row1Aura': '$0.01',
+                    'row1Single': '$0.50',
+                    'row2Metric': 'Waste per Usage',
+                    'row2Aura': 'Minimal (single tube per 300 uses)',
+                    'row2Single': 'Significant (plastic tube per use)',
+                    'row3Metric': 'Annual Savings',
+                    'row3Aura': 'N/A',
+                    'row3Single': 'Up to **$4,000** per unit*',
+                    'footnote': '*_Based on a high-traffic location with 8,000 uses per year._',
+                    'sustainabilityTitle': 'Sustainability and Financial Returns',
+                    'sustainabilityIntro': 'Beyond the immediate financial savings, the Aura-Dispense system offers a compelling case for sustainability. The reduction in single-use plastic directly translates into a quantifiable environmental benefit.',
+                    'plasticReductionTitle': 'Plastic Waste Reduction',
+                    'plasticReductionText': 'By replacing 300 single-use tubes with a single bulk one, the system saves approximately <strong>1.5 kg of plastic waste per unit</strong>. This is a tangible reduction in your environmental footprint and aligns with a broader commitment to sustainable operations.',
+                    'conclusionText': 'This system is not just an expense; it is a long-term <strong>investment</strong>. The return on investment (ROI) is evident through the substantial reduction in material costs and the positive impact on a brand\'s image as an environmentally conscious and forward-thinking provider. The efficient, precise dispensing becomes a beautiful, perfect detail—a small duty with a big impact.'
+                },
+                'es': {
+                    'viewTitle': 'Aura-Dispense: Vista Desglosada',
+                    'viewDescription': 'Explora los componentes clave del dispositivo. Haz clic en \'Desglosar\' para ver las capas y en \'Restaurar\' para volver a montarlo.',
+                    'breakdownButton': 'Desglosar',
+                    'resetButton': 'Restaurar',
+                    'dispenseButton': 'Dispensar',
+                    'controlText': 'Haz clic y arrastra para rotar. <br> Usa la rueda del mouse o pellizca para acercar/alejar. <br> Presiona **\'D\'** para dispensar.',
+                    'metricsTitle': 'Métricas Clave (Por Unidad):',
+                    'metricCost': '**Costo por Uso:** ~$0.01',
+                    'metricSavings': '**Ahorros Anuales:** Hasta ~$4,000',
+                    'metricWaste': '**Reducción de Residuos Plásticos:** ~1.5 kg',
+                    'dispenseCounterLabel': 'Dispensaciones:',
+                    'remainingLabel': 'Restante:',
+                    'reportTitle': 'Modelo de Precios y Operación Sostenible',
+                    'reportIntroText': 'Este documento ofrece un desglose técnico y completo del modelo de precios operativos del sistema Aura-Dispense. Está diseñado para ilustrar cómo este modelo proporciona un retorno de la inversión medible a la vez que reduce significativamente su huella ambiental. El siguiente análisis detalla los principales factores de coste y una comparación realista de coste-beneficio para demostrar su valor a largo plazo.',
+                    'costDriversTitle': 'Principales Factores de Coste Operativo',
+                    'costDriversIntro': 'Los costes recurrentes del sistema Aura-Dispense se basan en dos factores principales: consumibles y mantenimiento. El motor de bajo consumo del dispositivo y el sensor de infrarrojos consumen una energía insignificante.',
+                    'consumablesTitle': 'Consumibles (Pasta de Dientes)',
+                    'consumablesText': 'El principal coste recurrente es la pasta de dientes a granel. Un tubo estándar de 150g, que cuesta aproximadamente <strong>$3.00</strong>, puede rendir una "cantidad justa" constante de unos <strong>0.5g</strong> por dispensación. Esto proporciona <strong>300 dispensaciones por tubo</strong>.',
+                    'costPerDispense': '<strong>Costo por Dispensación: $0.01</strong>',
+                    'maintenanceTitle': 'Mantenimiento (Mano de Obra)',
+                    'maintenanceText': 'Esto incluye el tiempo dedicado a revisar, limpiar y rellenar el dispensador. Asumiendo una tarea de un minuto realizada una vez al día, esto suma un total de aproximadamente <strong>6 horas por año</strong> por unidad.',
+                    'annualMaintenanceCost': '<strong>Costo Anual de Mantenimiento</strong>: Con una tarifa de <strong>$20/hora</strong>, esto asciende a <strong>$120 por año</strong>.',
+                    'costBenefitTitle': 'Análisis de Coste-Beneficio: El ROI de la Eficiencia',
+                    'costBenefitIntro': 'El verdadero valor del sistema Aura-Dispense se ilustra mejor comparándolo con el modelo tradicional de pasta de dientes en envases de un solo uso.',
+                    'metricHeader': 'Métrica',
+                    'auraHeader': 'Sistema Aura-Dispense',
+                    'singleUseHeader': 'Tubos de un Solo Uso',
+                    'row1Metric': 'Costo por Uso',
+                    'row1Aura': '$0.01',
+                    'row1Single': '$0.50',
+                    'row2Metric': 'Residuos por Uso',
+                    'row2Aura': 'Mínimos (un solo tubo cada 300 usos)',
+                    'row2Single': 'Significativos (un tubo de plástico por uso)',
+                    'row3Metric': 'Ahorros Anuales',
+                    'row3Aura': 'N/A',
+                    'row3Single': 'Hasta **$4,000** por unidad*',
+                    'footnote': '*_Basado en un lugar de alto tráfico con 8,000 usos al año._',
+                    'sustainabilityTitle': 'Sostenibilidad y Rendimiento Financiero',
+                    'sustainabilityIntro': 'Más allá de los ahorros financieros inmediatos, el sistema Aura-Dispense presenta un caso convincente para la sostenibilidad. La reducción del plástico de un solo uso se traduce directamente en un beneficio ambiental cuantificable.',
+                    'plasticReductionTitle': 'Reducción de Residuos Plásticos',
+                    'plasticReductionText': 'Al sustituir 300 tubos de un solo uso por uno solo a granel, el sistema ahorra aproximadamente <strong>1.5 kg de residuos plásticos por unidad</strong>. Esta es una reducción tangible en su huella ambiental y se alinea con un compromiso más amplio con las operaciones sostenibles.',
+                    'conclusionText': 'Este sistema no es solo un gasto; es una <strong>inversión</strong> a largo plazo. El retorno de la inversión (ROI) es evidente a través de la reducción sustancial de los costes de material y el impacto positivo en la imagen de una marca como un proveedor consciente del medio ambiente y con visión de futuro. La dispensación eficiente y precisa se convierte en un detalle hermoso y perfecto: un pequeño deber con un gran impacto.'
+                }
+            };
+            const elements = {
+                viewTitle: document.getElementById('view-title'),
+                viewDescription: document.getElementById('view-description'),
+                breakdownButton: document.getElementById('breakdown-button'),
+                resetButton: document.getElementById('reset-button'),
+                dispenseButton: document.getElementById('dispense-button'),
+                controlText: document.getElementById('control-text'),
+                metricsTitle: document.getElementById('metrics-title'),
+                metricCost: document.getElementById('metric-cost'),
+                metricSavings: document.getElementById('metric-savings'),
+                metricWaste: document.getElementById('metric-waste'),
+                dispenseCounterLabel: document.getElementById('dispense-counter-label'),
+                dispenseCounter: document.getElementById('dispense-counter'),
+                remainingLabel: document.getElementById('remaining-label'),
+                remainingQuantity: document.getElementById('remaining-quantity'),
+                reportTitle: document.getElementById('report-title'),
+                reportIntroText: document.getElementById('report-intro-text'),
+                costDriversTitle: document.getElementById('cost-drivers-title'),
+                costDriversIntro: document.getElementById('cost-drivers-intro'),
+                consumablesTitle: document.getElementById('consumables-title'),
+                consumablesText: document.getElementById('consumables-text'),
+                costPerDispense: document.getElementById('cost-per-dispense'),
+                maintenanceTitle: document.getElementById('maintenance-title'),
+                maintenanceText: document.getElementById('maintenance-text'),
+                annualMaintenanceCost: document.getElementById('annual-maintenance-cost'),
+                costBenefitTitle: document.getElementById('cost-benefit-title'),
+                costBenefitIntro: document.getElementById('cost-benefit-intro'),
+                metricHeader: document.getElementById('metric-header'),
+                auraHeader: document.getElementById('aura-header'),
+                singleUseHeader: document.getElementById('single-use-header'),
+                row1Metric: document.getElementById('row1-metric'),
+                row1Aura: document.getElementById('row1-aura'),
+                row1Single: document.getElementById('row1-single'),
+                row2Metric: document.getElementById('row2-metric'),
+                row2Aura: document.getElementById('row2-aura'),
+                row2Single: document.getElementById('row2-single'),
+                row3Metric: document.getElementById('row3-metric'),
+                row3Aura: document.getElementById('row3-aura'),
+                row3Single: document.getElementById('row3-single'),
+                footnote: document.getElementById('footnote'),
+                sustainabilityTitle: document.getElementById('sustainability-title'),
+                sustainabilityIntro: document.getElementById('sustainability-intro'),
+                plasticReductionTitle: document.getElementById('plastic-reduction-title'),
+                plasticReductionText: document.getElementById('plastic-reduction-text'),
+                conclusionText: document.getElementById('conclusion-text')
+            };
+
+            const updateLanguage = (lang) => {
+                const text = translations[lang];
+                elements.viewTitle.innerText = text.viewTitle;
+                elements.viewDescription.innerText = text.viewDescription;
+                elements.breakdownButton.innerText = text.breakdownButton;
+                elements.resetButton.innerText = text.resetButton;
+                elements.dispenseButton.innerText = text.dispenseButton;
+                elements.controlText.innerHTML = text.controlText;
+                elements.metricsTitle.innerText = text.metricsTitle;
+                elements.metricCost.innerHTML = text.metricCost;
+                elements.metricSavings.innerHTML = text.metricSavings;
+                elements.metricWaste.innerHTML = text.metricWaste;
+                elements.dispenseCounterLabel.innerText = text.dispenseCounterLabel;
+                elements.remainingLabel.innerText = text.remainingLabel;
+                elements.reportTitle.innerText = text.reportTitle;
+                elements.reportIntroText.innerText = text.reportIntroText;
+                elements.costDriversTitle.innerText = text.costDriversTitle;
+                elements.costDriversIntro.innerText = text.costDriversIntro;
+                elements.consumablesTitle.innerText = text.consumablesTitle;
+                elements.consumablesText.innerHTML = text.consumablesText;
+                elements.costPerDispense.innerHTML = text.costPerDispense;
+                elements.maintenanceTitle.innerText = text.maintenanceTitle;
+                elements.maintenanceText.innerHTML = text.maintenanceText;
+                elements.annualMaintenanceCost.innerHTML = text.annualMaintenanceCost;
+                elements.costBenefitTitle.innerText = text.costBenefitTitle;
+                elements.costBenefitIntro.innerText = text.costBenefitIntro;
+                elements.metricHeader.innerText = text.metricHeader;
+                elements.auraHeader.innerText = text.auraHeader;
+                elements.singleUseHeader.innerText = text.singleUseHeader;
+                elements.row1Metric.innerText = text.row1Metric;
+                elements.row1Aura.innerText = text.row1Aura;
+                elements.row1Single.innerText = text.row1Single;
+                elements.row2Metric.innerText = text.row2Metric;
+                elements.row2Aura.innerText = text.row2Aura;
+                elements.row2Single.innerText = text.row2Single;
+                elements.row3Metric.innerText = text.row3Metric;
+                elements.row3Aura.innerText = text.row3Aura;
+                elements.row3Single.innerHTML = text.row3Single;
+                elements.footnote.innerHTML = text.footnote;
+                elements.sustainabilityTitle.innerText = text.sustainabilityTitle;
+                elements.sustainabilityIntro.innerText = text.sustainabilityIntro;
+                elements.plasticReductionTitle.innerText = text.plasticReductionTitle;
+                elements.plasticReductionText.innerHTML = text.plasticReductionText;
+                elements.conclusionText.innerHTML = text.conclusionText;
+            };
+
+            const languageSelector = document.getElementById('language-select');
+            languageSelector.addEventListener('change', (e) => {
+                updateLanguage(e.target.value);
+            });
+            updateLanguage(languageSelector.value);
+
+
+            // --- 3D Scene Setup ---
+            const canvas = document.getElementById('dispenser-breakdown');
+            const scene = new THREE.Scene();
+            const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+            
+            const setRendererSize = () => {
+                const width = window.innerWidth;
+                const height = window.innerHeight;
+                renderer.setSize(width, height);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            };
+            setRendererSize();
+
+            const camera = new THREE.PerspectiveCamera(45, canvas.offsetWidth / canvas.offsetHeight, 0.1, 1000);
+            camera.position.set(0, 1.5, 5);
+            camera.lookAt(0, 1.5, 0);
+
+            // Add lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight1.position.set(5, 5, 5);
+            scene.add(directionalLight1);
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+            directionalLight2.position.set(-5, -5, -5);
+            scene.add(directionalLight2);
+            const spotLight = new THREE.SpotLight(0xffffff, 0.3);
+            spotLight.position.set(0, 10, 0);
+            spotLight.angle = Math.PI / 4;
+            spotLight.penumbra = 0.5;
+            spotLight.decay = 2;
+            scene.add(spotLight);
+
+            // --- Materials (reused from v2.0) ---
+            const bodyMaterial = new THREE.MeshPhysicalMaterial({ color: 0xfafafa, roughness: 0.6, metalness: 0.1, clearcoat: 0.7, clearcoatRoughness: 0.3 });
+            const copperFilmMaterial = new THREE.MeshPhysicalMaterial({ color: 0xb87333, roughness: 0.2, metalness: 0.9, transparent: true, opacity: 0.7, clearcoat: 1.0, clearcoatRoughness: 0.1 });
+            const functionalMaterial = new THREE.MeshStandardMaterial({ color: 0x1a202c, roughness: 0.5, metalness: 0.1 });
+            const semiTransparentMaterial = new THREE.MeshStandardMaterial({ color: 0xeeeeee, transparent: true, opacity: 0.2, roughness: 0.5 });
+            const trayMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 });
+            const toothpasteMaterial = new THREE.MeshStandardMaterial({ color: 0xadd8e6, roughness: 0.5, metalness: 0.1 });
+
+
+            // --- Geometries and Object Creation ---
+            const dispenserGroup = new THREE.Group();
+            scene.add(dispenserGroup);
+
+            // Main Body
+            const bodyShape = new THREE.Shape();
+            bodyShape.moveTo(-1, 0);
+            bodyShape.lineTo(-1.1, 3.5);
+            bodyShape.bezierCurveTo(-1.1, 4.5, 1.1, 4.5, 1.1, 3.5);
+            bodyShape.lineTo(1, 0);
+            bodyShape.lineTo(-1, 0);
+            const extrudeSettings = { steps: 2, depth: 1.5, bevelEnabled: true, bevelThickness: 0.2, bevelSize: 0.1, bevelOffset: 0, bevelSegments: 5 };
+            const bodyGeometry = new THREE.ExtrudeGeometry(bodyShape, extrudeSettings);
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.name = "body";
+            body.position.set(0, 0, -0.75);
+            dispenserGroup.add(body);
+
+            // Copper Film
+            const filmGeometry = new THREE.ExtrudeGeometry(bodyShape, { ...extrudeSettings, depth: 1.52, bevelThickness: 0.22, bevelSize: 0.12 });
+            const film = new THREE.Mesh(filmGeometry, copperFilmMaterial);
+            film.name = "film";
+            film.position.set(0, 0, -0.76);
+            dispenserGroup.add(film);
+
+            // Dispensing Nozzle
+            const nozzleGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.3, 32);
+            const nozzle = new THREE.Mesh(nozzleGeometry, functionalMaterial);
+            nozzle.name = "nozzle";
+            nozzle.position.set(0, 0.15, 0.8);
+            dispenserGroup.add(nozzle);
+
+            // Sensor Area
+            const sensorGeometry = new THREE.BoxGeometry(0.5, 0.2, 0.05);
+            const sensor = new THREE.Mesh(sensorGeometry, functionalMaterial);
+            sensor.name = "sensor";
+            sensor.position.set(0, 1.5, 0.75 + 0.025);
+            dispenserGroup.add(sensor);
+            
+            // Internal Toothpaste Tube
+            const tubeGeometry = new THREE.CylinderGeometry(0.5, 0.5, 3.5, 32);
+            const tube = new THREE.Mesh(tubeGeometry, semiTransparentMaterial);
+            tube.name = "tube";
+            tube.position.set(0, 2, -0.2);
+            dispenserGroup.add(tube);
+
+            // Integrated Drip Tray
+            const trayGeometry = new THREE.BoxGeometry(2.5, 0.1, 1.5);
+            const tray = new THREE.Mesh(trayGeometry, trayMaterial);
+            tray.name = "tray";
+            tray.position.set(0, 0, 0.75);
+            dispenserGroup.add(tray);
+            
+            // --- Toothpaste and Text Label Group ---
+            const dispenseGroup = new THREE.Group();
+            dispenserGroup.add(dispenseGroup);
+            
+            // Toothpaste Drop
+            const toothpasteDropGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+            const toothpasteDrop = new THREE.Mesh(toothpasteDropGeometry, toothpasteMaterial);
+            toothpasteDrop.name = "toothpasteDrop";
+            dispenseGroup.add(toothpasteDrop);
+
+            // Text Label
+            const createTextTexture = (text) => {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                const font = '48px Arial';
+                context.font = font;
+                const metrics = context.measureText(text);
+                const textWidth = metrics.width;
+                const textHeight = 48;
+                
+                canvas.width = textWidth + 20;
+                canvas.height = textHeight + 20;
+                context.font = font;
+                context.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.fillStyle = 'black';
+                context.fillText(text, 10, textHeight + 5);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                return texture;
+            };
+
+            const textTexture = createTextTexture('~10g');
+            const textMaterial = new THREE.MeshBasicMaterial({ map: textTexture, transparent: true, side: THREE.DoubleSide });
+            const textGeometry = new THREE.PlaneGeometry(0.8, 0.4);
+            const textPlane = new THREE.Mesh(textGeometry, textMaterial);
+            textPlane.position.set(0.6, 0.2, 0);
+            dispenseGroup.add(textPlane);
+
+            dispenseGroup.visible = false;
+
+            const componentInfo = document.getElementById('component-info');
+
+            // Initial positions for reset
+            const initialPositions = {
+                body: body.position.clone(),
+                film: film.position.clone(),
+                nozzle: nozzle.position.clone(),
+                sensor: sensor.position.clone(),
+                tube: tube.position.clone(),
+                tray: tray.position.clone()
+            };
+
+            // Breakdown positions (with adjusted spacing)
+            const breakdownPositions = {
+                body: new THREE.Vector3(0, 0, -3),
+                film: new THREE.Vector3(0, 0, 3),
+                nozzle: new THREE.Vector3(0, -2, 0.8),
+                sensor: new THREE.Vector3(0, 4, 0.8),
+                tube: new THREE.Vector3(0, 2, -1.5),
+                tray: new THREE.Vector3(0, -2.5, 0.75)
+            };
+
+            // Live metrics state
+            let dispenseCount = 0;
+            let remainingQuantity = 150; // Initial quantity in grams
+            const dispensedAmount = 0.5; // Amount per dispense in grams
+
+            const updateLiveMetrics = () => {
+                document.getElementById('dispense-counter').innerText = dispenseCount;
+                document.getElementById('remaining-quantity').innerText = `${remainingQuantity.toFixed(1)}g`;
+            };
+
+            const dispense = () => {
+                if (dispenseGroup.visible || remainingQuantity < dispensedAmount) return;
+                
+                dispenseGroup.position.set(0, 0.15, 0.8);
+                dispenseGroup.visible = true;
+                
+                dispenseCount++;
+                remainingQuantity -= dispensedAmount;
+                updateLiveMetrics();
+
+                // Animate the toothpaste drop
+                gsap.to(dispenseGroup.position, {
+                    y: -0.5,
+                    duration: 1.5,
+                    ease: "power1.in",
+                    onComplete: () => {
+                        gsap.to(dispenseGroup.scale, {
+                            x: 1.5, y: 0.5, z: 1.5, duration: 0.5,
+                            ease: "power1.out",
+                            onComplete: () => {
+                                gsap.to(dispenseGroup.scale, { x: 0, y: 0, z: 0, duration: 0.5, onComplete: () => {
+                                    dispenseGroup.visible = false;
+                                    dispenseGroup.scale.set(1, 1, 1);
+                                }});
+                            }
+                        });
+                    }
+                });
+            };
+
+
+            // --- Animation Logic ---
+            const breakdown = () => {
+                gsap.to(body.position, { x: breakdownPositions.body.x, y: breakdownPositions.body.y, z: breakdownPositions.body.z, duration: 1.5, ease: "power2.out" });
+                gsap.to(film.position, { x: breakdownPositions.film.x, y: breakdownPositions.film.y, z: breakdownPositions.film.z, duration: 1.5, ease: "power2.out" });
+                gsap.to(nozzle.position, { x: breakdownPositions.nozzle.x, y: breakdownPositions.nozzle.y, z: breakdownPositions.nozzle.z, duration: 1.5, ease: "power2.out" });
+                gsap.to(sensor.position, { x: breakdownPositions.sensor.x, y: breakdownPositions.sensor.y, z: breakdownPositions.sensor.z, duration: 1.5, ease: "power2.out" });
+                gsap.to(tube.position, { x: breakdownPositions.tube.x, y: breakdownPositions.tube.y, z: breakdownPositions.tube.z, duration: 1.5, ease: "power2.out" });
+                gsap.to(tray.position, { x: breakdownPositions.tray.x, y: breakdownPositions.tray.y, z: breakdownPositions.tray.z, duration: 1.5, ease: "power2.out", onComplete: showComponentInfo });
+            };
+
+            const reset = () => {
+                gsap.to(body.position, { x: initialPositions.body.x, y: initialPositions.body.y, z: initialPositions.body.z, duration: 1.5, ease: "power2.inOut" });
+                gsap.to(film.position, { x: initialPositions.film.x, y: initialPositions.film.y, z: initialPositions.film.z, duration: 1.5, ease: "power2.inOut" });
+                gsap.to(nozzle.position, { x: initialPositions.nozzle.x, y: initialPositions.nozzle.y, z: initialPositions.nozzle.z, duration: 1.5, ease: "power2.inOut" });
+                gsap.to(sensor.position, { x: initialPositions.sensor.x, y: initialPositions.sensor.y, z: initialPositions.sensor.z, duration: 1.5, ease: "power2.inOut" });
+                gsap.to(tube.position, { x: initialPositions.tube.x, y: initialPositions.tube.y, z: initialPositions.tube.z, duration: 1.5, ease: "power2.inOut" });
+                gsap.to(tray.position, { x: initialPositions.tray.x, y: initialPositions.tray.y, z: initialPositions.tray.z, duration: 1.5, ease: "power2.inOut", onComplete: () => { document.getElementById('component-list').innerHTML = ''; } });
+            };
+
+            const showComponentInfo = () => {
+                document.getElementById('component-list').innerHTML = `
+                    <h3 class="text-lg font-bold">Key Components:</h3>
+                    <ul class="list-disc list-inside mt-2 space-y-2">
+                        <li>**Outer Shell (Body):** The main, ergonomic housing, sealed to prevent water ingress and designed for easy wiping.</li>
+                        <li>**Antimicrobial Film (Film):** A thin, self-sanitizing copper layer that continuously kills germs on contact.</li>
+                        <li>**Nozzle:** The functional, removable component that dispenses the pre-measured amount of toothpaste.</li>
+                        <li>**Contactless Sensor (Sensor):** The touch-free infrared sensor that triggers the dispensing mechanism.</li>
+                        <li>**Internal Tube (Tube):** The easily replaceable, standard-sized toothpaste tube.</li>
+                        <li>**Drip Tray (Tray):** A removable, integrated tray that catches any residue, making daily cleaning effortless.</li>
+                    </ul>
+                `;
+            };
+
+            // --- Event Listeners and Animation Loop ---
+            document.getElementById('breakdown-button').addEventListener('click', breakdown);
+            document.getElementById('reset-button').addEventListener('click', reset);
+            document.getElementById('dispense-button').addEventListener('click', dispense);
+            
+            // Added keyboard event listener
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'd' || event.key === 'D') {
+                    dispense();
+                }
+            });
+
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+            const onPointerDown = (event) => {
+                isDragging = true;
+                const clientX = event.clientX || event.touches[0].clientX;
+                const clientY = event.clientY || event.touches[0].clientY;
+                previousMousePosition.x = clientX;
+                previousMousePosition.y = clientY;
+                if (event.touches && event.touches.length === 2) {
+                    previousPinchDistance = getPinchDistance(event.touches);
+                }
+            };
+
+            const onPointerMove = (event) => {
+                if (!isDragging) return;
+                const clientX = event.clientX || event.touches[0].clientX;
+                const clientY = event.clientY || event.touches[0].clientY;
+                
+                const deltaX = (clientX - previousMousePosition.x) * 0.01;
+                const deltaY = (clientY - previousMousePosition.y) * 0.01;
+                
+                // Rotate the group
+                dispenserGroup.rotation.y += deltaX;
+                dispenserGroup.rotation.x += deltaY;
+
+                // Handle pinch-to-zoom for touch
+                if (event.touches && event.touches.length === 2) {
+                    const currentPinchDistance = getPinchDistance(event.touches);
+                    const zoomDelta = (currentPinchDistance - previousPinchDistance) * 0.01;
+                    camera.position.z -= zoomDelta;
+                    camera.position.z = Math.min(Math.max(camera.position.z, 2), 10);
+                    previousPinchDistance = currentPinchDistance;
+                }
+
+                previousMousePosition.x = clientX;
+                previousMousePosition.y = clientY;
+            };
+
+            const onPointerUp = () => { isDragging = false; };
+
+            const getPinchDistance = (touches) => {
+                const dx = touches[0].clientX - touches[1].clientX;
+                const dy = touches[0].clientY - touches[1].clientY;
+                return Math.sqrt(dx * dx + dy * dy);
+            };
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                setRendererSize();
+            });
+            window.addEventListener('mousedown', onPointerDown);
+            window.addEventListener('mousemove', onPointerMove);
+            window.addEventListener('mouseup', onPointerUp);
+            window.addEventListener('touchstart', onPointerDown);
+            window.addEventListener('touchmove', onPointerMove);
+            window.addEventListener('touchend', onPointerUp);
+            
+            window.addEventListener('wheel', (event) => {
+                event.preventDefault(); // Prevent page from scrolling
+                camera.position.z += event.deltaY * 0.01;
+                // Set zoom limits
+                camera.position.z = Math.min(Math.max(camera.position.z, 2), 10);
+            });
+
+
+            const animate = () => {
+                requestAnimationFrame(animate);
+                if (views['3d'].style.display === 'block') {
+                    dispenserGroup.rotation.y += 0.002;
+                    renderer.render(scene, camera);
+                }
+            };
+            
+            updateLiveMetrics();
+            animate();
+        };
+    </script>
+</body>
+</html>
